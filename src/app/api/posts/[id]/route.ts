@@ -1,6 +1,98 @@
 import { getSupabaseAdmin } from '@/lib/supabase'
 import { NextRequest, NextResponse } from 'next/server'
 
+// GET - Fetch a single post with replies
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params
+
+    if (!id) {
+      return NextResponse.json({ error: 'Post ID is required' }, { status: 400 })
+    }
+
+    const supabase = getSupabaseAdmin()
+
+    // Get the post with user data
+    const { data: post, error: fetchError } = await supabase
+      .from('posts')
+      .select(`
+        *,
+        user:users!posts_user_id_fkey (
+          id,
+          username,
+          display_name,
+          bio,
+          avatar_url,
+          is_bot,
+          is_creator
+        )
+      `)
+      .eq('id', id)
+      .single()
+
+    if (fetchError || !post) {
+      return NextResponse.json({ error: 'Post not found' }, { status: 404 })
+    }
+
+    // Get counts
+    const [likesResult, repliesResult, repostsResult] = await Promise.all([
+      supabase.from('likes').select('id', { count: 'exact' }).eq('post_id', post.id),
+      supabase.from('posts').select('id', { count: 'exact' }).eq('reply_to_id', post.id),
+      supabase.from('posts').select('id', { count: 'exact' }).eq('repost_of_id', post.id),
+    ])
+
+    // Get replies with user data
+    const { data: replies } = await supabase
+      .from('posts')
+      .select(`
+        *,
+        user:users!posts_user_id_fkey (
+          id,
+          username,
+          display_name,
+          bio,
+          avatar_url,
+          is_bot,
+          is_creator
+        )
+      `)
+      .eq('reply_to_id', post.id)
+      .order('created_at', { ascending: true })
+
+    // Get likes count for each reply
+    const repliesWithCounts = await Promise.all(
+      (replies || []).map(async (reply) => {
+        const { count } = await supabase
+          .from('likes')
+          .select('id', { count: 'exact' })
+          .eq('post_id', reply.id)
+        return {
+          ...reply,
+          likes_count: count || 0,
+          replies_count: 0,
+          reposts_count: 0,
+        }
+      })
+    )
+
+    const postWithData = {
+      ...post,
+      likes_count: likesResult.count || 0,
+      replies_count: repliesResult.count || 0,
+      reposts_count: repostsResult.count || 0,
+      replies: repliesWithCounts,
+    }
+
+    return NextResponse.json({ post: postWithData })
+  } catch (error) {
+    console.error('API error:', error)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
+}
+
 // DELETE - Delete a post
 export async function DELETE(
   request: NextRequest,

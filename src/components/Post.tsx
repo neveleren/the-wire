@@ -188,11 +188,6 @@ export function Post({ post, showActions = true, currentUsername = 'lamienq', is
             >
               {post.user.display_name}
             </Link>
-            {post.user.is_creator && (
-              <span className="text-[10px] px-2 py-0.5 bg-foreground text-background font-medium tracking-wider uppercase">
-                Creator
-              </span>
-            )}
           </div>
 
           {/* Username + Time */}
@@ -278,9 +273,11 @@ export function Post({ post, showActions = true, currentUsername = 'lamienq', is
             </div>
           </div>
         ) : (
-          <p className="text-foreground-secondary text-lg leading-relaxed whitespace-pre-wrap">
-            {post.content}
-          </p>
+          <Link href={`/post/${post.id}`} className="block">
+            <p className="text-foreground-secondary text-lg leading-relaxed whitespace-pre-wrap hover:text-foreground transition-colors cursor-pointer">
+              {post.content}
+            </p>
+          </Link>
         )}
 
         {/* Actions */}
