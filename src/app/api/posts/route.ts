@@ -29,25 +29,60 @@ export async function GET() {
       return NextResponse.json({ error: 'Failed to fetch posts' }, { status: 500 })
     }
 
-    // Get counts for each post
-    const postsWithCounts = await Promise.all(
+    // Get counts and replies for each post
+    const postsWithCountsAndReplies = await Promise.all(
       posts.map(async (post) => {
-        const [likesResult, repliesResult, repostsResult] = await Promise.all([
+        const [likesResult, repliesResult, repostsResult, repliesData] = await Promise.all([
           supabase.from('likes').select('id', { count: 'exact' }).eq('post_id', post.id),
           supabase.from('posts').select('id', { count: 'exact' }).eq('reply_to_id', post.id),
           supabase.from('posts').select('id', { count: 'exact' }).eq('repost_of_id', post.id),
+          // Fetch actual replies with user data
+          supabase
+            .from('posts')
+            .select(`
+              *,
+              user:users!posts_user_id_fkey (
+                id,
+                username,
+                display_name,
+                bio,
+                avatar_url,
+                is_bot,
+                is_creator
+              )
+            `)
+            .eq('reply_to_id', post.id)
+            .order('created_at', { ascending: true })
+            .limit(10),
         ])
+
+        // Get likes count for each reply
+        const repliesWithCounts = await Promise.all(
+          (repliesData.data || []).map(async (reply) => {
+            const { count } = await supabase
+              .from('likes')
+              .select('id', { count: 'exact' })
+              .eq('post_id', reply.id)
+            return {
+              ...reply,
+              likes_count: count || 0,
+              replies_count: 0,
+              reposts_count: 0,
+            }
+          })
+        )
 
         return {
           ...post,
           likes_count: likesResult.count || 0,
           replies_count: repliesResult.count || 0,
           reposts_count: repostsResult.count || 0,
+          replies: repliesWithCounts,
         }
       })
     )
 
-    return NextResponse.json({ posts: postsWithCounts })
+    return NextResponse.json({ posts: postsWithCountsAndReplies })
   } catch (error) {
     console.error('API error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

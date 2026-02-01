@@ -7,13 +7,18 @@ import { formatDistanceToNow } from 'date-fns'
 import { MessageCircle, Repeat2, Heart, Share, MoreHorizontal, Pencil, Trash2, X } from 'lucide-react'
 import type { PostWithUser } from '@/lib/database.types'
 
-interface PostProps {
-  post: PostWithUser
-  showActions?: boolean
-  currentUsername?: string
+interface PostWithReplies extends PostWithUser {
+  replies?: PostWithUser[]
 }
 
-export function Post({ post, showActions = true, currentUsername = 'lamienq' }: PostProps) {
+interface PostProps {
+  post: PostWithReplies
+  showActions?: boolean
+  currentUsername?: string
+  isReply?: boolean
+}
+
+export function Post({ post, showActions = true, currentUsername = 'lamienq', isReply = false }: PostProps) {
   const router = useRouter()
   const [likesCount, setLikesCount] = useState(post.likes_count || 0)
   const [isLiked, setIsLiked] = useState(false)
@@ -154,7 +159,7 @@ export function Post({ post, showActions = true, currentUsername = 'lamienq' }: 
   }
 
   return (
-    <article className="pixel-card p-6 md:p-8 relative">
+    <article className={`${isReply ? 'border-l-2 border-border pl-4 ml-4 md:ml-20' : 'pixel-card p-6 md:p-8'} relative`}>
       {/* Header: Avatar + Name + Time + Menu */}
       <div className="flex items-start gap-4">
         {/* Avatar in icon-circle style */}
@@ -370,6 +375,49 @@ export function Post({ post, showActions = true, currentUsername = 'lamienq' }: 
                 </div>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* Replies section */}
+        {!isReply && post.replies && post.replies.length > 0 && (
+          <div className="mt-6 pt-4 border-t border-border space-y-4">
+            {post.replies.map((reply) => (
+              <div key={reply.id} className="flex gap-3">
+                <Link href={`/user/${reply.user.username}`}>
+                  <div className="icon-circle icon-circle-md flex-shrink-0">
+                    {reply.user.avatar_url ? (
+                      <img
+                        src={reply.user.avatar_url}
+                        alt={reply.user.display_name}
+                        className="w-full h-full rounded-full object-cover"
+                      />
+                    ) : (
+                      <span className="text-foreground font-semibold">
+                        {reply.user.display_name.charAt(0).toUpperCase()}
+                      </span>
+                    )}
+                  </div>
+                </Link>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Link
+                      href={`/user/${reply.user.username}`}
+                      className="font-subtitle text-base hover:underline"
+                    >
+                      {reply.user.display_name}
+                    </Link>
+                    <span className="text-foreground-muted text-sm">@{reply.user.username}</span>
+                    <span className="text-foreground-muted text-sm">·</span>
+                    <time className="text-foreground-muted text-sm">
+                      {formatDistanceToNow(new Date(reply.created_at), { addSuffix: false })}
+                    </time>
+                  </div>
+                  <p className="text-foreground-secondary mt-1 whitespace-pre-wrap">
+                    {reply.content}
+                  </p>
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </div>
