@@ -133,51 +133,78 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to create post' }, { status: 500 })
     }
 
-    // If this is a new post (not a reply) and NOT from a bot, trigger bot comments
     const botUsernames = ['ethan_k', 'elijah_b']
-    if (!reply_to_id && !botUsernames.includes(userToPost)) {
-      // Trigger Ethan to comment
-      fetch('https://neveleren.app.n8n.cloud/webhook/ethan-comment', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          post_id: post.id,
-          content: content
-        })
-      }).catch(err => console.error('Failed to trigger Ethan comment:', err))
+    const depth = body.depth || 0
+    const MAX_REPLY_DEPTH = 3 // Limit bot-to-bot replies to prevent loops
 
-      // Trigger Elijah to comment
-      fetch('https://neveleren.app.n8n.cloud/webhook/elijah-comment', {
+    // Helper to trigger a bot reply
+    const triggerBot = (botUsername: string, targetPostId: string, targetContent: string, newDepth: number) => {
+      const webhook = botUsername === 'ethan_k'
+        ? 'https://neveleren.app.n8n.cloud/webhook/ethan-comment'
+        : 'https://neveleren.app.n8n.cloud/webhook/elijah-comment'
+
+      fetch(webhook, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          post_id: post.id,
-          content: content
+          post_id: targetPostId,
+          content: targetContent,
+          depth: newDepth
         })
-      }).catch(err => console.error('Failed to trigger Elijah comment:', err))
+      }).catch(err => console.error(`Failed to trigger ${botUsername}:`, err))
     }
 
-    // If a bot posts, let the other bot potentially comment
-    if (!reply_to_id && userToPost === 'ethan_k') {
-      fetch('https://neveleren.app.n8n.cloud/webhook/elijah-comment', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          post_id: post.id,
-          content: content
-        })
-      }).catch(err => console.error('Failed to trigger Elijah comment on Ethan post:', err))
+    // NEW POST (not a reply)
+    if (!reply_to_id) {
+      if (!botUsernames.includes(userToPost)) {
+        // User posted - both bots comment
+        triggerBot('ethan_k', post.id, content, 0)
+        triggerBot('elijah_b', post.id, content, 0)
+      } else if (userToPost === 'ethan_k') {
+        // Ethan posted - Elijah comments
+        triggerBot('elijah_b', post.id, content, 0)
+      } else if (userToPost === 'elijah_b') {
+        // Elijah posted - Ethan comments
+        triggerBot('ethan_k', post.id, content, 0)
+      }
     }
+    // REPLY to someone's comment
+    else if (reply_to_id) {
+      // Get the parent comment to see who wrote it
+      const { data: parentPost } = await supabase
+        .from('posts')
+        .select('user_id, content, user:users!posts_user_id_fkey(username)')
+        .eq('id', reply_to_id)
+        .single()
 
-    if (!reply_to_id && userToPost === 'elijah_b') {
-      fetch('https://neveleren.app.n8n.cloud/webhook/ethan-comment', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          post_id: post.id,
-          content: content
-        })
-      }).catch(err => console.error('Failed to trigger Ethan comment on Elijah post:', err))
+      if (parentPost) {
+        const parentUser = parentPost.user as unknown as { username: string }[] | { username: string }
+        const parentUsername = Array.isArray(parentUser) ? parentUser[0]?.username : parentUser?.username
+
+        // User replied to a bot - that bot replies back
+        if (!botUsernames.includes(userToPost) && parentUsername && botUsernames.includes(parentUsername)) {
+          triggerBot(parentUsername, post.id, content, depth + 1)
+        }
+        // Bot replied to another bot - the other bot replies (with depth limit)
+        else if (botUsernames.includes(userToPost) && parentUsername && botUsernames.includes(parentUsername) && depth < MAX_REPLY_DEPTH) {
+          // Only reply ~50% of the time to make it more natural
+          if (Math.random() > 0.5) {
+            const otherBot = userToPost === 'ethan_k' ? 'elijah_b' : 'ethan_k'
+            // Small delay to make conversation feel natural
+            setTimeout(() => {
+              triggerBot(otherBot, post.id, content, depth + 1)
+            }, 2000)
+          }
+        }
+        // Bot replied to user - user might get a follow-up from the other bot sometimes
+        else if (botUsernames.includes(userToPost) && parentUsername && !botUsernames.includes(parentUsername) && depth < 1) {
+          // 30% chance the other bot chimes in
+          if (Math.random() > 0.7) {
+            const otherBot = userToPost === 'ethan_k' ? 'elijah_b' : 'ethan_k'
+            triggerBot(otherBot, post.id, content, depth + 1)
+          }
+        }
+      }
     }
 
     return NextResponse.json({ success: true, post })
