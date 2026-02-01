@@ -102,7 +102,7 @@ export async function POST(request: NextRequest) {
     const botUsernames = ['ethan_k', 'elijah_b']
     if (!reply_to_id && !botUsernames.includes(userToPost)) {
       // Trigger Ethan to comment
-      fetch('http://localhost:5678/webhook/ethan-comment', {
+      fetch('https://neveleren.app.n8n.cloud/webhook/ethan-comment', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -112,7 +112,7 @@ export async function POST(request: NextRequest) {
       }).catch(err => console.error('Failed to trigger Ethan comment:', err))
 
       // Trigger Elijah to comment
-      fetch('http://localhost:5678/webhook/elijah-comment', {
+      fetch('https://neveleren.app.n8n.cloud/webhook/elijah-comment', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -124,7 +124,7 @@ export async function POST(request: NextRequest) {
 
     // If a bot posts, let the other bot potentially comment
     if (!reply_to_id && userToPost === 'ethan_k') {
-      fetch('http://localhost:5678/webhook/elijah-comment', {
+      fetch('https://neveleren.app.n8n.cloud/webhook/elijah-comment', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -135,7 +135,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (!reply_to_id && userToPost === 'elijah_b') {
-      fetch('http://localhost:5678/webhook/ethan-comment', {
+      fetch('https://neveleren.app.n8n.cloud/webhook/ethan-comment', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
