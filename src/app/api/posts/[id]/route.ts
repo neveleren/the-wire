@@ -29,7 +29,8 @@ export async function DELETE(
 
     // Check if user owns the post (default to lamienq)
     const userToDelete = username || 'lamienq'
-    const postUsername = (post.user as { username: string })?.username
+    const userArray = post.user as unknown as { username: string }[] | { username: string }
+    const postUsername = Array.isArray(userArray) ? userArray[0]?.username : userArray?.username
 
     if (postUsername !== userToDelete) {
       return NextResponse.json({ error: 'You can only delete your own posts' }, { status: 403 })
@@ -95,7 +96,8 @@ export async function PATCH(
 
     // Check if user owns the post
     const userToEdit = username || 'lamienq'
-    const postUsername = (post.user as { username: string })?.username
+    const userArray2 = post.user as unknown as { username: string }[] | { username: string }
+    const postUsername = Array.isArray(userArray2) ? userArray2[0]?.username : userArray2?.username
 
     if (postUsername !== userToEdit) {
       return NextResponse.json({ error: 'You can only edit your own posts' }, { status: 403 })
