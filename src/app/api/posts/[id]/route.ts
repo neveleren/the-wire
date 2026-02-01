@@ -44,8 +44,9 @@ export async function GET(
       supabase.from('posts').select('id', { count: 'exact' }).eq('repost_of_id', post.id),
     ])
 
-    // Get replies with user data
-    const { data: replies } = await supabase
+    // Get ALL replies in this thread (including nested replies)
+    // First get direct replies to the main post
+    const { data: directReplies } = await supabase
       .from('posts')
       .select(`
         *,
@@ -62,9 +63,39 @@ export async function GET(
       .eq('reply_to_id', post.id)
       .order('created_at', { ascending: true })
 
+    // Get IDs of direct replies to fetch their nested replies
+    const directReplyIds = (directReplies || []).map(r => r.id)
+
+    // Fetch nested replies (replies to direct replies)
+    let nestedReplies: typeof directReplies = []
+    if (directReplyIds.length > 0) {
+      const { data: nested } = await supabase
+        .from('posts')
+        .select(`
+          *,
+          user:users!posts_user_id_fkey (
+            id,
+            username,
+            display_name,
+            bio,
+            avatar_url,
+            is_bot,
+            is_creator
+          )
+        `)
+        .in('reply_to_id', directReplyIds)
+        .order('created_at', { ascending: true })
+      nestedReplies = nested || []
+    }
+
+    // Combine and sort all replies by created_at
+    const allReplies = [...(directReplies || []), ...nestedReplies].sort(
+      (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    )
+
     // Get likes count for each reply
     const repliesWithCounts = await Promise.all(
-      (replies || []).map(async (reply) => {
+      allReplies.map(async (reply) => {
         const { count } = await supabase
           .from('likes')
           .select('id', { count: 'exact' })
