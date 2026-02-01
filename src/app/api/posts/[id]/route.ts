@@ -44,67 +44,79 @@ export async function GET(
       supabase.from('posts').select('id', { count: 'exact' }).eq('repost_of_id', post.id),
     ])
 
-    // Get ALL replies in this thread (including nested replies)
-    // First get direct replies to the main post
+    // Get ALL replies in this thread recursively (up to 5 levels deep)
+    const selectQuery = `
+      *,
+      user:users!posts_user_id_fkey (
+        id,
+        username,
+        display_name,
+        bio,
+        avatar_url,
+        is_bot,
+        is_creator
+      )
+    `
+
+    // Recursive function to fetch all replies
+    const fetchRepliesRecursively = async (parentIds: string[], depth = 0, maxDepth = 5): Promise<typeof directReplies> => {
+      if (depth >= maxDepth || parentIds.length === 0) return []
+
+      const { data: replies } = await supabase
+        .from('posts')
+        .select(selectQuery)
+        .in('reply_to_id', parentIds)
+        .order('created_at', { ascending: true })
+
+      if (!replies || replies.length === 0) return []
+
+      const childIds = replies.map(r => r.id)
+      const childReplies = await fetchRepliesRecursively(childIds, depth + 1, maxDepth)
+
+      return [...replies, ...childReplies]
+    }
+
+    // Get direct replies first
     const { data: directReplies } = await supabase
       .from('posts')
-      .select(`
-        *,
-        user:users!posts_user_id_fkey (
-          id,
-          username,
-          display_name,
-          bio,
-          avatar_url,
-          is_bot,
-          is_creator
-        )
-      `)
+      .select(selectQuery)
       .eq('reply_to_id', post.id)
       .order('created_at', { ascending: true })
 
-    // Get IDs of direct replies to fetch their nested replies
+    // Get all nested replies recursively
     const directReplyIds = (directReplies || []).map(r => r.id)
-
-    // Fetch nested replies (replies to direct replies)
-    let nestedReplies: typeof directReplies = []
-    if (directReplyIds.length > 0) {
-      const { data: nested } = await supabase
-        .from('posts')
-        .select(`
-          *,
-          user:users!posts_user_id_fkey (
-            id,
-            username,
-            display_name,
-            bio,
-            avatar_url,
-            is_bot,
-            is_creator
-          )
-        `)
-        .in('reply_to_id', directReplyIds)
-        .order('created_at', { ascending: true })
-      nestedReplies = nested || []
-    }
+    const nestedReplies = await fetchRepliesRecursively(directReplyIds, 0, 5)
 
     // Combine and sort all replies by created_at
-    const allReplies = [...(directReplies || []), ...nestedReplies].sort(
+    const allReplies = [...(directReplies || []), ...(nestedReplies || [])].sort(
       (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
     )
 
-    // Get likes count for each reply
+    // Build a map of post IDs to user info for "replying to" display
+    const postUserMap: Record<string, { username: string; display_name: string }> = {
+      [post.id]: { username: post.user.username, display_name: post.user.display_name }
+    }
+    allReplies.forEach(reply => {
+      postUserMap[reply.id] = { username: reply.user.username, display_name: reply.user.display_name }
+    })
+
+    // Get likes count for each reply and add "replying to" info
     const repliesWithCounts = await Promise.all(
       allReplies.map(async (reply) => {
         const { count } = await supabase
           .from('likes')
           .select('id', { count: 'exact' })
           .eq('post_id', reply.id)
+
+        // Get the user this reply is responding to
+        const replyingToUser = reply.reply_to_id ? postUserMap[reply.reply_to_id] : null
+
         return {
           ...reply,
           likes_count: count || 0,
           replies_count: 0,
           reposts_count: 0,
+          replying_to: replyingToUser,
         }
       })
     )

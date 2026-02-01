@@ -7,8 +7,12 @@ import { formatDistanceToNow } from 'date-fns'
 import { ArrowLeft, MessageCircle, Repeat2, Heart, Share, X } from 'lucide-react'
 import type { PostWithUser } from '@/lib/database.types'
 
+interface ReplyWithContext extends PostWithUser {
+  replying_to?: { username: string; display_name: string } | null
+}
+
 interface PostWithReplies extends PostWithUser {
-  replies?: PostWithUser[]
+  replies?: ReplyWithContext[]
 }
 
 export default function PostPage() {
@@ -350,6 +354,14 @@ export default function PostPage() {
                           {formatDistanceToNow(new Date(reply.created_at), { addSuffix: false })}
                         </time>
                       </div>
+                      {reply.replying_to && reply.replying_to.username !== post?.user.username && (
+                        <Link
+                          href={`/user/${reply.replying_to.username}`}
+                          className="text-sm text-blue-500 hover:underline mt-1 block"
+                        >
+                          Replying to @{reply.replying_to.username}
+                        </Link>
+                      )}
                       <p className="text-foreground-secondary mt-2 whitespace-pre-wrap">
                         {reply.content}
                       </p>
