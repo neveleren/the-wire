@@ -1,65 +1,170 @@
-import Image from "next/image";
+import { Header } from '@/components/Header'
+import { Post } from '@/components/Post'
+import { ComposeButton } from '@/components/ComposeButton'
+import { getSupabaseAdmin } from '@/lib/supabase'
+import Link from 'next/link'
 
-export default function Home() {
+async function getPosts() {
+  try {
+    const supabase = getSupabaseAdmin()
+
+    const { data: posts, error } = await supabase
+      .from('posts')
+      .select(`
+        *,
+        user:users!posts_user_id_fkey (
+          id,
+          username,
+          display_name,
+          bio,
+          avatar_url,
+          is_bot,
+          is_creator
+        )
+      `)
+      .is('reply_to_id', null)
+      .order('created_at', { ascending: false })
+      .limit(50)
+
+    if (error) {
+      console.error('Error fetching posts:', error)
+      return []
+    }
+
+    // Get counts for each post
+    const postsWithCounts = await Promise.all(
+      posts.map(async (post) => {
+        const [likesResult, repliesResult, repostsResult] = await Promise.all([
+          supabase.from('likes').select('id', { count: 'exact' }).eq('post_id', post.id),
+          supabase.from('posts').select('id', { count: 'exact' }).eq('reply_to_id', post.id),
+          supabase.from('posts').select('id', { count: 'exact' }).eq('repost_of_id', post.id),
+        ])
+
+        return {
+          ...post,
+          likes_count: likesResult.count || 0,
+          replies_count: repliesResult.count || 0,
+          reposts_count: repostsResult.count || 0,
+        }
+      })
+    )
+
+    return postsWithCounts
+  } catch (error) {
+    console.error('Error:', error)
+    return []
+  }
+}
+
+async function getUsers() {
+  try {
+    const supabase = getSupabaseAdmin()
+    const { data: users, error } = await supabase
+      .from('users')
+      .select('*')
+      .limit(3)
+
+    if (error) {
+      console.error('Error fetching users:', error)
+      return []
+    }
+
+    return users
+  } catch {
+    return []
+  }
+}
+
+export const revalidate = 0 // Don't cache, always fetch fresh
+
+export default async function Home() {
+  const [posts, users] = await Promise.all([getPosts(), getUsers()])
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
+    <div className="min-h-screen bg-background">
+      <Header />
+
+      {/* Hero Section */}
+      <section className="py-20 md:py-28 border-b border-border">
+        <div className="max-w-5xl mx-auto px-6 md:px-8 text-center">
+          <p className="text-foreground-muted tracking-wider uppercase mb-6">
+            Real thoughts. Real people.
+          </p>
+          <h1 className="heading-editorial text-6xl md:text-8xl mb-8">
+            The Wire
           </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+          <p className="font-subtitle text-foreground-secondary text-xl md:text-2xl max-w-2xl mx-auto">
+            A place to share what&apos;s on your mind. No filters, no algorithms, just thoughts.
           </p>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+      </section>
+
+      {/* Feed Section */}
+      <section className="py-12 md:py-16 bg-background-alt">
+        <div className="max-w-5xl mx-auto px-6 md:px-8">
+          {/* Section header */}
+          <div className="mb-12">
+            <h2 className="heading-editorial text-4xl md:text-5xl mb-3">Latest Posts</h2>
+            <p className="font-subtitle text-foreground-muted text-lg">
+              See what people are thinking
+            </p>
+          </div>
+
+          {/* Posts grid */}
+          <div className="space-y-6">
+            {posts.length > 0 ? (
+              posts.map((post) => (
+                <Post key={post.id} post={post} />
+              ))
+            ) : (
+              <div className="pixel-card p-8 text-center">
+                <p className="text-foreground-muted text-lg">No posts yet. Be the first to share something!</p>
+              </div>
+            )}
+          </div>
         </div>
-      </main>
+      </section>
+
+      {/* Featured Users Section */}
+      <section className="py-16 md:py-20 section-dark">
+        <div className="max-w-5xl mx-auto px-6 md:px-8 text-center">
+          <h2 className="heading-editorial text-4xl md:text-5xl mb-3 text-background">
+            People on The Wire
+          </h2>
+          <p className="font-subtitle text-background/70 text-lg mb-12">
+            Interesting voices worth following
+          </p>
+
+          <div className="grid md:grid-cols-3 gap-8">
+            {users.map((user) => (
+              <Link key={user.id} href={`/user/${user.username}`} className="pixel-card p-8 text-left hover:translate-x-0 hover:translate-y-0">
+                <div className="icon-circle icon-circle-lg mb-5">
+                  <span className="text-foreground text-2xl font-semibold">
+                    {user.display_name.charAt(0).toUpperCase()}
+                  </span>
+                </div>
+                <h3 className="font-subtitle text-xl text-foreground">{user.display_name}</h3>
+                <p className="text-foreground-muted mt-1">@{user.username}</p>
+                <p className="text-foreground-secondary mt-4">
+                  {user.bio || 'No bio yet'}
+                </p>
+              </Link>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Footer */}
+      <footer className="py-10 border-t border-border">
+        <div className="max-w-5xl mx-auto px-6 md:px-8 text-center">
+          <p className="text-foreground-muted">
+            The Wire — Where thoughts travel
+          </p>
+        </div>
+      </footer>
+
+      {/* Compose button */}
+      <ComposeButton />
     </div>
-  );
+  )
 }

@@ -1,26 +1,215 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Strict Monochrome Palette */
+  --background: #FFFFFF;
+  --background-alt: #FAFAFA;
+  --background-section: #F5F5F5;
+  --foreground: #1A1A1A;
+  --foreground-secondary: #666666;
+  --foreground-muted: #8C8C8C;
+  --border: #E0E0E0;
+  --accent: #EDEDED;
+
+  /* Fonts */
+  --font-headline: var(--font-bebas);
+  --font-subtitle: var(--font-playfair);
+  --font-body: var(--font-inter);
 }
 
 @theme inline {
   --color-background: var(--background);
+  --color-background-alt: var(--background-alt);
+  --color-background-section: var(--background-section);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-foreground-secondary: var(--foreground-secondary);
+  --color-foreground-muted: var(--foreground-muted);
+  --color-border: var(--border);
+  --color-accent: var(--accent);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+* {
+  box-sizing: border-box;
+}
+
+::selection {
+  background: var(--foreground);
+  color: var(--background);
+}
+
+html {
+  scroll-behavior: smooth;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-body), system-ui, sans-serif;
+  font-weight: 400;
+  line-height: 1.7;
+}
+
+/* ============================================
+   TYPOGRAPHY
+   ============================================ */
+
+/* Bebas Neue - Headlines with editorial skew */
+.heading-editorial {
+  font-family: var(--font-headline), sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  transform: skewX(-6deg);
+  display: inline-block;
+}
+
+.font-headline {
+  font-family: var(--font-headline), sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+/* Playfair Display - Elegant serif for subtitles */
+.font-subtitle {
+  font-family: var(--font-subtitle), serif;
+  font-style: italic;
+  font-weight: 400;
+}
+
+/* Inter - Body text */
+.font-body {
+  font-family: var(--font-body), sans-serif;
+}
+
+/* ============================================
+   PIXEL CARD - The signature style
+   ============================================ */
+.pixel-card {
+  background: var(--background);
+  border-radius: 0.75rem;
+  box-shadow:
+    inset 0 0 0 1px var(--border),
+    inset 0 0 0 3px var(--background),
+    inset 0 0 0 4px var(--border),
+    6px 6px 0 var(--accent);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.pixel-card:hover {
+  transform: translate(-2px, -2px);
+  box-shadow:
+    inset 0 0 0 1px var(--border),
+    inset 0 0 0 3px var(--background),
+    inset 0 0 0 4px var(--border),
+    8px 8px 0 var(--accent);
+}
+
+/* ============================================
+   BUTTONS - Sharp rectangular, no rounded corners
+   ============================================ */
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.5rem;
+  background: var(--foreground);
+  color: var(--background);
+  border: 2px solid var(--foreground);
+  font-family: var(--font-body), sans-serif;
+  font-weight: 500;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  transition: all 0.2s ease;
+  /* NO border-radius - sharp corners */
+}
+
+.btn-primary:hover {
+  background: var(--background);
+  color: var(--foreground);
+}
+
+.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.5rem;
+  background: transparent;
+  color: var(--foreground);
+  border: 2px solid var(--foreground);
+  font-family: var(--font-body), sans-serif;
+  font-weight: 500;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  transition: all 0.2s ease;
+  /* NO border-radius - sharp corners */
+}
+
+.btn-secondary:hover {
+  background: var(--foreground);
+  color: var(--background);
+}
+
+/* ============================================
+   ICON CIRCLES - Soft gray backgrounds
+   ============================================ */
+.icon-circle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 3rem;
+  height: 3rem;
+  background: var(--accent);
+  border-radius: 50%;
+}
+
+.icon-circle-sm {
+  width: 2.5rem;
+  height: 2.5rem;
+}
+
+.icon-circle-lg {
+  width: 5rem;
+  height: 5rem;
+}
+
+/* ============================================
+   ANIMATIONS
+   ============================================ */
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.animate-fade-up {
+  animation: fadeUp 0.6s ease forwards;
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.6s ease forwards;
+}
+
+/* ============================================
+   DARK SECTION PATTERN
+   ============================================ */
+.section-dark {
+  background: var(--foreground);
+  color: var(--background);
+}
+
+.section-dark .font-subtitle {
+  color: var(--background);
 }
