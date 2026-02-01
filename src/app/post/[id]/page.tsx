@@ -20,6 +20,8 @@ export default function PostPage() {
   const [isReplying, setIsReplying] = useState(false)
   const [replyContent, setReplyContent] = useState('')
   const [isSubmittingReply, setIsSubmittingReply] = useState(false)
+  const [replyingToComment, setReplyingToComment] = useState<string | null>(null)
+  const [commentReplyContent, setCommentReplyContent] = useState('')
   const [likesCount, setLikesCount] = useState(0)
   const [isLiked, setIsLiked] = useState(false)
   const [isLiking, setIsLiking] = useState(false)
@@ -88,6 +90,42 @@ export default function PostPage() {
       if (response.ok) {
         setReplyContent('')
         setIsReplying(false)
+        // Refresh the post to show new reply
+        const refreshResponse = await fetch(`/api/posts/${params.id}`)
+        if (refreshResponse.ok) {
+          const data = await refreshResponse.json()
+          setPost(data.post)
+        }
+      } else {
+        const data = await response.json()
+        alert(data.error || 'Failed to post reply')
+      }
+    } catch (error) {
+      console.error('Failed to reply:', error)
+      alert('Failed to post reply')
+    } finally {
+      setIsSubmittingReply(false)
+    }
+  }
+
+  const handleCommentReply = async (commentId: string) => {
+    if (!commentReplyContent.trim() || isSubmittingReply) return
+    setIsSubmittingReply(true)
+
+    try {
+      const response = await fetch('/api/posts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          content: commentReplyContent,
+          username: currentUsername,
+          reply_to_id: commentId
+        }),
+      })
+
+      if (response.ok) {
+        setCommentReplyContent('')
+        setReplyingToComment(null)
         // Refresh the post to show new reply
         const refreshResponse = await fetch(`/api/posts/${params.id}`)
         if (refreshResponse.ok) {
@@ -315,6 +353,60 @@ export default function PostPage() {
                       <p className="text-foreground-secondary mt-2 whitespace-pre-wrap">
                         {reply.content}
                       </p>
+
+                      {/* Reply button */}
+                      <button
+                        onClick={() => {
+                          setReplyingToComment(replyingToComment === reply.id ? null : reply.id)
+                          setCommentReplyContent('')
+                        }}
+                        className="flex items-center gap-1 mt-3 text-foreground-muted hover:text-foreground transition-colors text-sm"
+                      >
+                        <MessageCircle size={14} />
+                        <span>Reply</span>
+                      </button>
+
+                      {/* Reply form for this comment */}
+                      {replyingToComment === reply.id && (
+                        <div className="mt-3 pt-3 border-t border-border">
+                          <div className="flex gap-2">
+                            <div className="icon-circle icon-circle-sm flex-shrink-0">
+                              <span className="text-foreground font-semibold text-xs">R</span>
+                            </div>
+                            <div className="flex-1">
+                              <textarea
+                                value={commentReplyContent}
+                                onChange={(e) => setCommentReplyContent(e.target.value)}
+                                placeholder={`Reply to ${reply.user.display_name}...`}
+                                className="w-full p-2 border-2 border-foreground bg-background text-foreground resize-none focus:outline-none placeholder:text-foreground-muted text-sm"
+                                rows={2}
+                                maxLength={500}
+                              />
+                              <div className="flex items-center gap-2 mt-2">
+                                <button
+                                  onClick={() => handleCommentReply(reply.id)}
+                                  disabled={!commentReplyContent.trim() || isSubmittingReply}
+                                  className="px-3 py-1 bg-foreground text-background text-sm font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
+                                >
+                                  {isSubmittingReply ? 'Posting...' : 'Reply'}
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setReplyingToComment(null)
+                                    setCommentReplyContent('')
+                                  }}
+                                  className="p-1 text-foreground-muted hover:text-foreground transition-colors"
+                                >
+                                  <X size={16} />
+                                </button>
+                                <span className="text-xs text-foreground-muted ml-auto">
+                                  {commentReplyContent.length}/500
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </article>
