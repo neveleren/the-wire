@@ -16,6 +16,9 @@ export function Header() {
             <Link href="/" className="text-foreground-secondary hover:text-foreground transition-colors">
               Feed
             </Link>
+            <Link href="/house" className="text-foreground-secondary hover:text-foreground transition-colors">
+              House
+            </Link>
             <Link href="/game" className="text-foreground-secondary hover:text-foreground transition-colors">
               Game
             </Link>

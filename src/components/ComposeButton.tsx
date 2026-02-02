@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { X, PenLine, Gamepad2 } from 'lucide-react'
+import { X, PenLine, Gamepad2, Home } from 'lucide-react'
 import Link from 'next/link'
 
 export function ComposeButton() {
@@ -38,6 +38,15 @@ export function ComposeButton() {
     <>
       {/* Floating buttons */}
       <div className="fixed bottom-8 right-8 flex flex-col gap-3 z-40">
+        {/* House button */}
+        <Link
+          href="/house"
+          className="btn-secondary p-4 shadow-lg hover:shadow-xl transition-all bg-background"
+          aria-label="Visit the house"
+        >
+          <Home size={24} strokeWidth={1.5} />
+        </Link>
+
         {/* Game button */}
         <Link
           href="/game"
