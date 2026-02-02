@@ -253,20 +253,45 @@ export async function POST(request: NextRequest) {
         else if (!botUsernames.includes(userToPost) && parentUsername && botUsernames.includes(parentUsername)) {
           triggerBot(parentUsername, post.id, content, depth + 1)
         }
-        // Bot replied to another bot - the other bot ALWAYS replies (up to 5 exchanges)
+        // Bot replied to another bot's COMMENT - continue their dialogue (up to 5 exchanges)
         else if (botUsernames.includes(userToPost) && parentUsername && botUsernames.includes(parentUsername) && depth < MAX_BOT_TO_BOT_DEPTH) {
           const otherBot = userToPost === 'ethan_k' ? 'elijah_b' : 'ethan_k'
-          console.log(`[The Wire] Bot ${userToPost} replied, triggering ${otherBot} at depth ${depth + 1}`)
-          // Small delay to make conversation feel natural
+          console.log(`[The Wire] Bot ${userToPost} replied to ${parentUsername}, triggering ${otherBot} at depth ${depth + 1}`)
           setTimeout(() => {
             triggerBot(otherBot, post.id, content, depth + 1)
           }, 3000)
         }
-        // Bot replied to creator (you) - 30% chance the OTHER bot chimes in too
+        // Bot commented on creator's POST - check if the other bot also commented, then start dialogue
         else if (botUsernames.includes(userToPost) && parentUsername === creatorUsername) {
-          if (Math.random() > 0.7) {
-            const otherBot = userToPost === 'ethan_k' ? 'elijah_b' : 'ethan_k'
-            setTimeout(() => triggerBot(otherBot, post.id, content, 0), 5000)
+          const otherBot = userToPost === 'ethan_k' ? 'elijah_b' : 'ethan_k'
+
+          // Check if the other bot has already commented on this same post
+          const { data: otherBotUser } = await supabase
+            .from('users')
+            .select('id')
+            .eq('username', otherBot)
+            .single()
+
+          if (otherBotUser) {
+            const { data: otherBotComment } = await supabase
+              .from('posts')
+              .select('id, content')
+              .eq('reply_to_id', reply_to_id) // Same parent (the user's original post)
+              .eq('user_id', otherBotUser.id)
+              .order('created_at', { ascending: false })
+              .limit(1)
+              .maybeSingle()
+
+            if (otherBotComment) {
+              // Both bots have now commented on the user's post!
+              // Trigger the OTHER bot to reply to THIS bot's comment (starting their dialogue)
+              console.log(`[The Wire] Both bots commented on user's post! ${otherBot} will reply to ${userToPost}'s comment`)
+              setTimeout(() => {
+                triggerBot(otherBot, post.id, content, 1)
+              }, 4000)
+            } else {
+              console.log(`[The Wire] ${userToPost} commented on user's post, waiting for ${otherBot} to also comment first`)
+            }
           }
         }
       }
