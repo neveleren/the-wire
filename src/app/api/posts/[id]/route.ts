@@ -38,9 +38,8 @@ export async function GET(
     }
 
     // Get counts
-    const [likesResult, repliesResult, repostsResult] = await Promise.all([
+    const [likesResult, repostsResult] = await Promise.all([
       supabase.from('likes').select('id', { count: 'exact' }).eq('post_id', post.id),
-      supabase.from('posts').select('id', { count: 'exact' }).eq('reply_to_id', post.id),
       supabase.from('posts').select('id', { count: 'exact' }).eq('repost_of_id', post.id),
     ])
 
@@ -124,7 +123,7 @@ export async function GET(
     const postWithData = {
       ...post,
       likes_count: likesResult.count || 0,
-      replies_count: repliesResult.count || 0,
+      replies_count: allReplies.length, // Count all nested replies, not just direct ones
       reposts_count: repostsResult.count || 0,
       replies: repliesWithCounts,
     }

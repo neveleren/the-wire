@@ -31,19 +31,36 @@ async function getPosts() {
       return []
     }
 
+    // Recursive function to count all replies in a thread
+    const countAllReplies = async (postIds: string[], depth = 0, maxDepth = 10): Promise<number> => {
+      if (depth >= maxDepth || postIds.length === 0) return 0
+
+      const { data: replies } = await supabase
+        .from('posts')
+        .select('id')
+        .in('reply_to_id', postIds)
+
+      if (!replies || replies.length === 0) return 0
+
+      const childIds = replies.map(r => r.id)
+      const nestedCount = await countAllReplies(childIds, depth + 1, maxDepth)
+
+      return replies.length + nestedCount
+    }
+
     // Get counts for each post
     const postsWithCounts = await Promise.all(
       posts.map(async (post) => {
-        const [likesResult, repliesResult, repostsResult] = await Promise.all([
+        const [likesResult, repostsResult, totalReplies] = await Promise.all([
           supabase.from('likes').select('id', { count: 'exact' }).eq('post_id', post.id),
-          supabase.from('posts').select('id', { count: 'exact' }).eq('reply_to_id', post.id),
           supabase.from('posts').select('id', { count: 'exact' }).eq('repost_of_id', post.id),
+          countAllReplies([post.id]),
         ])
 
         return {
           ...post,
           likes_count: likesResult.count || 0,
-          replies_count: repliesResult.count || 0,
+          replies_count: totalReplies,
           reposts_count: repostsResult.count || 0,
         }
       })
