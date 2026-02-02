@@ -1,7 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { X, PenLine } from 'lucide-react'
+import { X, PenLine, Gamepad2 } from 'lucide-react'
+import Link from 'next/link'
 
 export function ComposeButton() {
   const [isOpen, setIsOpen] = useState(false)
@@ -35,14 +36,26 @@ export function ComposeButton() {
 
   return (
     <>
-      {/* Floating compose button */}
-      <button
-        onClick={() => setIsOpen(true)}
-        className="fixed bottom-8 right-8 btn-primary p-4 shadow-lg hover:shadow-xl transition-shadow z-40"
-        aria-label="Write a post"
-      >
-        <PenLine size={24} strokeWidth={1.5} />
-      </button>
+      {/* Floating buttons */}
+      <div className="fixed bottom-8 right-8 flex flex-col gap-3 z-40">
+        {/* Game button */}
+        <Link
+          href="/game"
+          className="btn-secondary p-4 shadow-lg hover:shadow-xl transition-all bg-background"
+          aria-label="Play game"
+        >
+          <Gamepad2 size={24} strokeWidth={1.5} />
+        </Link>
+
+        {/* Compose button */}
+        <button
+          onClick={() => setIsOpen(true)}
+          className="btn-primary p-4 shadow-lg hover:shadow-xl transition-shadow"
+          aria-label="Write a post"
+        >
+          <PenLine size={24} strokeWidth={1.5} />
+        </button>
+      </div>
 
       {/* Modal overlay */}
       {isOpen && (
