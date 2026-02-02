@@ -409,8 +409,8 @@ export function Post({ post, showActions = true, currentUsername = 'lamienq', is
                       {formatDistanceToNow(new Date(reply.created_at), { addSuffix: false })}
                     </time>
                   </div>
-                  {/* Show "Replying to" for nested replies */}
-                  {(reply as any).replying_to && (reply as any).replying_to.username !== post?.user.username && (
+                  {/* Show "Replying to" for nested replies (not for direct replies to the original post) */}
+                  {(reply as any).replying_to && reply.reply_to_id !== post.id && (
                     <Link
                       href={`/user/${(reply as any).replying_to.username}`}
                       className="text-sm text-blue-500 hover:underline block mt-0.5"
