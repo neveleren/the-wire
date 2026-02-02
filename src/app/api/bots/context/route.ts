@@ -168,7 +168,6 @@ export async function POST(request: Request) {
       .from('bot_states')
       .update({
         last_post_at: new Date().toISOString(),
-        posts_today: supabase.rpc ? undefined : 1, // Increment handled separately
       })
       .eq('bot_username', bot_username)
 
