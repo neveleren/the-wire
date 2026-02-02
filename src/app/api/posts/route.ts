@@ -289,7 +289,7 @@ export async function POST(request: NextRequest) {
           if (otherBotUser) {
             const { data: otherBotComment } = await supabase
               .from('posts')
-              .select('id, content')
+              .select('id, content, created_at')
               .eq('reply_to_id', reply_to_id) // Same parent (the user's original post)
               .eq('user_id', otherBotUser.id)
               .order('created_at', { ascending: false })
@@ -298,10 +298,19 @@ export async function POST(request: NextRequest) {
 
             if (otherBotComment) {
               // Both bots have now commented on the user's post!
-              // Trigger the OTHER bot to reply to THIS bot's comment (starting their dialogue)
-              console.log(`[The Wire] Both bots commented on user's post! ${otherBot} will reply to ${userToPost}'s comment`)
-              await new Promise(resolve => setTimeout(resolve, 4000))
-              await triggerBot(otherBot, post.id, content, 1)
+              // BUT only the SECOND bot to comment should trigger the dialogue
+              // This prevents both bots from triggering simultaneously
+              const thisCommentTime = new Date(post.created_at).getTime()
+              const otherCommentTime = new Date(otherBotComment.created_at).getTime()
+
+              if (thisCommentTime > otherCommentTime) {
+                // This bot commented AFTER the other - this is the second commenter, start dialogue
+                console.log(`[The Wire] ${userToPost} is the second bot to comment, starting dialogue with ${otherBot}`)
+                await new Promise(resolve => setTimeout(resolve, 4000))
+                await triggerBot(otherBot, post.id, content, 1)
+              } else {
+                console.log(`[The Wire] ${userToPost} was first to comment, waiting for ${otherBot} to trigger dialogue`)
+              }
             } else {
               console.log(`[The Wire] ${userToPost} commented on user's post, waiting for ${otherBot} to also comment first`)
             }
