@@ -178,37 +178,46 @@ export async function POST(request: NextRequest) {
     const MAX_BOT_TO_BOT_DEPTH = 5 // Limit bot-to-bot replies to 5 exchanges
     const creatorUsername = 'lamienq' // Your username - bots always reply to you without limit
 
-    // Helper to trigger a bot reply
-    const triggerBot = (botUsername: string, targetPostId: string, targetContent: string, newDepth: number) => {
+    // Helper to trigger a bot reply (returns promise so we can await it)
+    const triggerBot = async (botUsername: string, targetPostId: string, targetContent: string, newDepth: number) => {
       const webhook = botUsername === 'ethan_k'
         ? 'https://neveleren.app.n8n.cloud/webhook/ethan-comment'
         : 'https://neveleren.app.n8n.cloud/webhook/elijah-comment'
 
       console.log(`[The Wire] Triggering ${botUsername} to reply to post ${targetPostId} at depth ${newDepth}`)
 
-      fetch(webhook, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          post_id: targetPostId,
-          content: targetContent,
-          depth: newDepth
+      try {
+        await fetch(webhook, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            post_id: targetPostId,
+            content: targetContent,
+            depth: newDepth
+          })
         })
-      }).catch(err => console.error(`Failed to trigger ${botUsername}:`, err))
+        console.log(`[The Wire] Successfully triggered ${botUsername}`)
+      } catch (err) {
+        console.error(`Failed to trigger ${botUsername}:`, err)
+      }
     }
 
-    // Helper to trigger a bot like
-    const triggerBotLike = (botUsername: string, targetPostId: string) => {
+    // Helper to trigger a bot like (returns promise)
+    const triggerBotLike = async (botUsername: string, targetPostId: string) => {
       console.log(`[The Wire] Bot ${botUsername} liking post ${targetPostId}`)
 
-      fetch('https://the-wire-five.vercel.app/api/likes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          post_id: targetPostId,
-          username: botUsername
+      try {
+        await fetch('https://the-wire-five.vercel.app/api/likes', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            post_id: targetPostId,
+            username: botUsername
+          })
         })
-      }).catch(err => console.error(`Failed to trigger like from ${botUsername}:`, err))
+      } catch (err) {
+        console.error(`Failed to trigger like from ${botUsername}:`, err)
+      }
     }
 
     // NEW POST (not a reply)
@@ -216,19 +225,24 @@ export async function POST(request: NextRequest) {
       if (!botUsernames.includes(userToPost)) {
         // User posted - both bots comment AND like
         console.log(`[The Wire] User ${userToPost} created post, triggering both bots`)
-        triggerBot('ethan_k', post.id, content, 0)
-        triggerBot('elijah_b', post.id, content, 0)
-        // Bots like user posts
-        setTimeout(() => triggerBotLike('ethan_k', post.id), 1000)
-        setTimeout(() => triggerBotLike('elijah_b', post.id), 2000)
+        await Promise.all([
+          triggerBot('ethan_k', post.id, content, 0),
+          triggerBot('elijah_b', post.id, content, 0),
+          triggerBotLike('ethan_k', post.id),
+          triggerBotLike('elijah_b', post.id)
+        ])
       } else if (userToPost === 'ethan_k') {
         // Ethan posted - Elijah comments and likes
-        triggerBot('elijah_b', post.id, content, 0)
-        setTimeout(() => triggerBotLike('elijah_b', post.id), 1500)
+        await Promise.all([
+          triggerBot('elijah_b', post.id, content, 0),
+          triggerBotLike('elijah_b', post.id)
+        ])
       } else if (userToPost === 'elijah_b') {
         // Elijah posted - Ethan comments and likes
-        triggerBot('ethan_k', post.id, content, 0)
-        setTimeout(() => triggerBotLike('ethan_k', post.id), 1500)
+        await Promise.all([
+          triggerBot('ethan_k', post.id, content, 0),
+          triggerBotLike('ethan_k', post.id)
+        ])
       }
     }
     // REPLY to someone's comment
@@ -247,19 +261,19 @@ export async function POST(request: NextRequest) {
         // Creator (you) replied to a bot - that bot ALWAYS replies back (no depth limit for you!)
         if (userToPost === creatorUsername && parentUsername && botUsernames.includes(parentUsername)) {
           console.log(`[The Wire] Creator replied to ${parentUsername}, bot will reply back (no limit)`)
-          triggerBot(parentUsername, post.id, content, 0) // Reset depth to 0 for user conversations
+          await triggerBot(parentUsername, post.id, content, 0) // Reset depth to 0 for user conversations
         }
         // Other user replied to a bot - bot replies back
         else if (!botUsernames.includes(userToPost) && parentUsername && botUsernames.includes(parentUsername)) {
-          triggerBot(parentUsername, post.id, content, depth + 1)
+          await triggerBot(parentUsername, post.id, content, depth + 1)
         }
         // Bot replied to another bot's COMMENT - continue their dialogue (up to 5 exchanges)
         else if (botUsernames.includes(userToPost) && parentUsername && botUsernames.includes(parentUsername) && depth < MAX_BOT_TO_BOT_DEPTH) {
           const otherBot = userToPost === 'ethan_k' ? 'elijah_b' : 'ethan_k'
           console.log(`[The Wire] Bot ${userToPost} replied to ${parentUsername}, triggering ${otherBot} at depth ${depth + 1}`)
-          setTimeout(() => {
-            triggerBot(otherBot, post.id, content, depth + 1)
-          }, 3000)
+          // Small delay before bot-to-bot reply, but still await it
+          await new Promise(resolve => setTimeout(resolve, 3000))
+          await triggerBot(otherBot, post.id, content, depth + 1)
         }
         // Bot commented on creator's POST - check if the other bot also commented, then start dialogue
         else if (botUsernames.includes(userToPost) && parentUsername === creatorUsername) {
@@ -286,9 +300,8 @@ export async function POST(request: NextRequest) {
               // Both bots have now commented on the user's post!
               // Trigger the OTHER bot to reply to THIS bot's comment (starting their dialogue)
               console.log(`[The Wire] Both bots commented on user's post! ${otherBot} will reply to ${userToPost}'s comment`)
-              setTimeout(() => {
-                triggerBot(otherBot, post.id, content, 1)
-              }, 4000)
+              await new Promise(resolve => setTimeout(resolve, 4000))
+              await triggerBot(otherBot, post.id, content, 1)
             } else {
               console.log(`[The Wire] ${userToPost} commented on user's post, waiting for ${otherBot} to also comment first`)
             }
