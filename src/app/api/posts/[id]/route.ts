@@ -59,7 +59,7 @@ export async function GET(
     `
 
     // Recursive function to fetch all replies
-    const fetchRepliesRecursively = async (parentIds: string[], depth = 0, maxDepth = 5): Promise<typeof directReplies> => {
+    const fetchRepliesRecursively = async (parentIds: string[], depth = 0, maxDepth = 5): Promise<any[]> => {
       if (depth >= maxDepth || parentIds.length === 0) return []
 
       const { data: replies } = await supabase
@@ -73,7 +73,7 @@ export async function GET(
       const childIds = replies.map(r => r.id)
       const childReplies = await fetchRepliesRecursively(childIds, depth + 1, maxDepth)
 
-      return [...replies, ...childReplies]
+      return [...replies, ...(childReplies || [])]
     }
 
     // Get direct replies first
