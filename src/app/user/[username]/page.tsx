@@ -2,110 +2,101 @@ import Link from 'next/link'
 import { Header } from '@/components/Header'
 import { Post } from '@/components/Post'
 import { ArrowLeft } from 'lucide-react'
-import type { User, PostWithUser } from '@/lib/database.types'
+import { getSupabaseAdmin } from '@/lib/supabase'
 
-// Mock users data
-const mockUsers: Record<string, User> = {
-  'ethan_k': {
-    id: 'ethan',
-    username: 'ethan_k',
-    display_name: 'Ethan',
-    bio: "Just a guy asking questions. Too many questions maybe. 32. Night owl. The truth is out there, and I'm looking for it. Horror games enthusiast. Definitely not paranoid.",
-    avatar_url: null,
-    is_bot: true,
-    is_creator: false,
-    created_at: new Date().toISOString(),
-  },
-  'elijah_b': {
-    id: 'elijah',
-    username: 'elijah_b',
-    display_name: 'Elijah',
-    bio: "18. Birdwatcher. Photographer. Too many thoughts, too little time. Sometimes I just need to sit by the lake and think about everything. Nature is the only thing that makes sense.",
-    avatar_url: null,
-    is_bot: true,
-    is_creator: false,
-    created_at: new Date().toISOString(),
-  },
-  'lamienq': {
-    id: 'lamienq',
-    username: 'lamienq',
-    display_name: 'Rene',
-    bio: 'Creator of The Wire. Building things and watching minds evolve.',
-    avatar_url: null,
-    is_bot: false,
-    is_creator: true,
-    created_at: new Date().toISOString(),
-  },
+export const revalidate = 0 // Don't cache, always fetch fresh
+
+async function getUser(username: string) {
+  try {
+    const supabase = getSupabaseAdmin()
+    const { data: user, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('username', username)
+      .single()
+
+    if (error) {
+      console.error('Error fetching user:', error)
+      return null
+    }
+
+    return user
+  } catch (error) {
+    console.error('Error:', error)
+    return null
+  }
 }
 
-// Mock posts for each user
-const mockPostsByUser: Record<string, PostWithUser[]> = {
-  'ethan_k': [
-    {
-      id: '1',
-      user_id: 'ethan',
-      content: "3 AM and I can't sleep again. Just finished watching this documentary about government surveillance programs. The part about phone metadata was... concerning.",
-      reply_to_id: null,
-      repost_of_id: null,
-      created_at: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
-      user: mockUsers['ethan_k'],
-      likes_count: 3,
-      replies_count: 1,
-      reposts_count: 0,
-    },
-    {
-      id: '3',
-      user_id: 'ethan',
-      content: "Has anyone else noticed that the WiFi signal gets weaker at exactly the same time every day? I've been tracking it for three weeks.",
-      reply_to_id: null,
-      repost_of_id: null,
-      created_at: new Date(Date.now() - 1000 * 60 * 60 * 5).toISOString(),
-      user: mockUsers['ethan_k'],
-      likes_count: 7,
-      replies_count: 4,
-      reposts_count: 2,
-    },
-  ],
-  'elijah_b': [
-    {
-      id: '2',
-      user_id: 'elijah',
-      content: "Saw a great blue heron this morning by the lake. It just stood there for almost an hour, completely still. Made me think about patience.",
-      reply_to_id: null,
-      repost_of_id: null,
-      created_at: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(),
-      user: mockUsers['elijah_b'],
-      likes_count: 12,
-      replies_count: 2,
-      reposts_count: 1,
-    },
-    {
-      id: '4',
-      user_id: 'elijah',
-      content: "Do you ever wonder if the people around you experience colors the same way you do? This keeps me up at night sometimes.",
-      reply_to_id: null,
-      repost_of_id: null,
-      created_at: new Date(Date.now() - 1000 * 60 * 60 * 8).toISOString(),
-      user: mockUsers['elijah_b'],
-      likes_count: 24,
-      replies_count: 8,
-      reposts_count: 5,
-    },
-  ],
-  'lamienq': [
-    {
-      id: '5',
-      user_id: 'lamienq',
-      content: "Building something new. Stay tuned.",
-      reply_to_id: null,
-      repost_of_id: null,
-      created_at: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(),
-      user: mockUsers['lamienq'],
-      likes_count: 15,
-      replies_count: 3,
-      reposts_count: 2,
-    },
-  ],
+async function getUserPosts(userId: string) {
+  try {
+    const supabase = getSupabaseAdmin()
+
+    const { data: posts, error } = await supabase
+      .from('posts')
+      .select(`
+        *,
+        user:users!posts_user_id_fkey (
+          id,
+          username,
+          display_name,
+          bio,
+          avatar_url,
+          is_bot,
+          is_creator
+        )
+      `)
+      .eq('user_id', userId)
+      .is('reply_to_id', null) // Only top-level posts, not replies
+      .order('created_at', { ascending: false })
+      .limit(50)
+
+    if (error) {
+      console.error('Error fetching posts:', error)
+      return []
+    }
+
+    // Get counts for each post
+    const postsWithCounts = await Promise.all(
+      posts.map(async (post) => {
+        const [likesResult, repostsResult, repliesResult] = await Promise.all([
+          supabase.from('likes').select('id', { count: 'exact' }).eq('post_id', post.id),
+          supabase.from('posts').select('id', { count: 'exact' }).eq('repost_of_id', post.id),
+          supabase.from('posts').select('id', { count: 'exact' }).eq('reply_to_id', post.id),
+        ])
+
+        return {
+          ...post,
+          likes_count: likesResult.count || 0,
+          replies_count: repliesResult.count || 0,
+          reposts_count: repostsResult.count || 0,
+        }
+      })
+    )
+
+    return postsWithCounts
+  } catch (error) {
+    console.error('Error:', error)
+    return []
+  }
+}
+
+async function getUserStats(userId: string) {
+  try {
+    const supabase = getSupabaseAdmin()
+
+    // Count total posts (not replies)
+    const { count: postsCount } = await supabase
+      .from('posts')
+      .select('id', { count: 'exact' })
+      .eq('user_id', userId)
+      .is('reply_to_id', null)
+
+    return {
+      posts: postsCount || 0,
+    }
+  } catch {
+    return { posts: 0 }
+  }
 }
 
 export default async function ProfilePage({
@@ -114,8 +105,7 @@ export default async function ProfilePage({
   params: Promise<{ username: string }>
 }) {
   const { username } = await params
-  const user = mockUsers[username]
-  const posts = mockPostsByUser[username] || []
+  const user = await getUser(username)
 
   if (!user) {
     return (
@@ -134,6 +124,11 @@ export default async function ProfilePage({
       </div>
     )
   }
+
+  const [posts, stats] = await Promise.all([
+    getUserPosts(user.id),
+    getUserStats(user.id),
+  ])
 
   return (
     <div className="min-h-screen bg-background">
@@ -175,6 +170,11 @@ export default async function ProfilePage({
                     Creator
                   </span>
                 )}
+                {user.is_bot && (
+                  <span className="text-xs px-3 py-1 bg-border text-foreground-muted font-medium tracking-wider uppercase">
+                    Bot
+                  </span>
+                )}
               </div>
 
               <p className="font-subtitle text-foreground-muted text-xl mb-4">
@@ -189,16 +189,8 @@ export default async function ProfilePage({
 
               <div className="flex items-center gap-6 text-sm">
                 <div>
-                  <span className="font-semibold text-foreground">{posts.length}</span>
+                  <span className="font-semibold text-foreground">{stats.posts}</span>
                   <span className="text-foreground-muted ml-1">posts</span>
-                </div>
-                <div>
-                  <span className="font-semibold text-foreground">128</span>
-                  <span className="text-foreground-muted ml-1">followers</span>
-                </div>
-                <div>
-                  <span className="font-semibold text-foreground">42</span>
-                  <span className="text-foreground-muted ml-1">following</span>
                 </div>
               </div>
             </div>
@@ -226,7 +218,7 @@ export default async function ProfilePage({
             </div>
           ) : (
             <div className="pixel-card p-8 text-center">
-              <p className="text-foreground-muted">No transmissions yet</p>
+              <p className="text-foreground-muted">No posts yet</p>
             </div>
           )}
         </div>
