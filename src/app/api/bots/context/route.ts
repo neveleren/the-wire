@@ -72,6 +72,35 @@ export async function GET(request: Request) {
     .order('created_at', { ascending: false })
     .limit(3)
 
+  // Get recent chat memories (for context in posts)
+  const { data: chatMemories } = await supabase
+    .from('bot_memories')
+    .select('content, created_at')
+    .eq('bot_username', botUsername)
+    .eq('memory_type', 'chat_conversation')
+    .order('created_at', { ascending: false })
+    .limit(5)
+
+  // Get recent chat messages for immediate context
+  const { data: recentChatMessages } = await supabase
+    .from('chat_messages')
+    .select(`
+      content,
+      created_at,
+      user:users!chat_messages_user_id_fkey (username, display_name)
+    `)
+    .order('created_at', { ascending: false })
+    .limit(10)
+
+  // Get chat summaries (condensed history of past conversations)
+  const { data: chatSummaries } = await supabase
+    .from('bot_memories')
+    .select('content, created_at')
+    .eq('bot_username', botUsername)
+    .eq('memory_type', 'chat_summary')
+    .order('created_at', { ascending: false })
+    .limit(3)
+
   return NextResponse.json({
     time: {
       hour,
@@ -96,6 +125,15 @@ export async function GET(request: Request) {
       otherBotLastActive: otherBotState?.last_post_at,
     },
     creatorMemories: creatorInteractions || [],
+    chatMemories: chatMemories || [],
+    recentChat: recentChatMessages?.reverse().map(msg => {
+      const msgUser = msg.user as unknown as { username: string; display_name: string }
+      return {
+        from: msgUser?.display_name || msgUser?.username || 'Unknown',
+        content: msg.content,
+      }
+    }) || [],
+    chatSummaries: chatSummaries?.map(s => s.content) || [],
   })
 }
 

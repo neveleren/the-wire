@@ -1,6 +1,7 @@
 import { Header } from '@/components/Header'
 import { Post } from '@/components/Post'
 import { ComposeButton } from '@/components/ComposeButton'
+import { ChatBubble } from '@/components/ChatBubble'
 import { getSupabaseAdmin } from '@/lib/supabase'
 import Link from 'next/link'
 
@@ -182,6 +183,9 @@ export default async function Home() {
 
       {/* Compose button */}
       <ComposeButton />
+
+      {/* Chat bubble */}
+      <ChatBubble />
     </div>
   )
 }
