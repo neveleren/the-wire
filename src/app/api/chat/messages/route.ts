@@ -181,6 +181,7 @@ export async function POST(request: Request) {
       botUsername: string,
       targetContent: string,
       senderUsername: string,
+      messageId: string,
       replyInfo?: { username: string; displayName: string; content: string } | null
     ) => {
       const webhook = botUsername === 'ethan_k'
@@ -207,6 +208,8 @@ export async function POST(request: Request) {
             sender_display_name: senderUsername === 'lamienq' ? 'Rene' :
                                  senderUsername === 'ethan_k' ? 'Ethan' :
                                  senderUsername === 'elijah_b' ? 'Eli' : senderUsername,
+            // The message ID the bot should reply to
+            reply_to_message_id: messageId,
             chat_history: chatHistory,
             other_bot_said: otherBotLastMsg?.content || null,
             // Reply context - who the sender was replying to
@@ -257,10 +260,10 @@ export async function POST(request: Request) {
 
       // Fire webhooks immediately (can't use setTimeout on serverless)
       // Both bots will respond - n8n workflows handle their own timing
-      triggerBotChat('ethan_k', content, userToPost, replyContext).catch(err =>
+      triggerBotChat('ethan_k', content, userToPost, message.id, replyContext).catch(err =>
         console.error('Ethan chat trigger failed:', err)
       )
-      triggerBotChat('elijah_b', content, userToPost, replyContext).catch(err =>
+      triggerBotChat('elijah_b', content, userToPost, message.id, replyContext).catch(err =>
         console.error('Eli chat trigger failed:', err)
       )
     }
@@ -281,7 +284,7 @@ export async function POST(request: Request) {
       // 30% chance the other bot continues the conversation
       const otherBot = userToPost === 'ethan_k' ? 'elijah_b' : 'ethan_k'
       if (Math.random() < 0.3) {
-        triggerBotChat(otherBot, content, userToPost, replyContext).catch(err =>
+        triggerBotChat(otherBot, content, userToPost, message.id, replyContext).catch(err =>
           console.error('Other bot chat trigger failed:', err)
         )
       }
