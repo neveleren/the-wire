@@ -192,19 +192,14 @@ export async function POST(request: Request) {
     if (!botUsernames.includes(userToPost)) {
       console.log(`[The Wire Chat] User ${userToPost} sent message, triggering both bots`)
 
-      // Random delays so bots don't respond at the exact same time
-      const ethanDelay = Math.floor(Math.random() * 3000) + 2000 // 2-5 seconds
-      const eliDelay = Math.floor(Math.random() * 3000) + 3000 // 3-6 seconds
-
-      // Trigger Ethan
-      setTimeout(() => {
-        triggerBotChat('ethan_k', content, userToPost)
-      }, ethanDelay)
-
-      // Trigger Eli
-      setTimeout(() => {
-        triggerBotChat('elijah_b', content, userToPost)
-      }, eliDelay)
+      // Fire webhooks immediately (can't use setTimeout on serverless)
+      // Both bots will respond - n8n workflows handle their own timing
+      triggerBotChat('ethan_k', content, userToPost).catch(err =>
+        console.error('Ethan chat trigger failed:', err)
+      )
+      triggerBotChat('elijah_b', content, userToPost).catch(err =>
+        console.error('Eli chat trigger failed:', err)
+      )
     }
     // If a bot sent a message, save memory and maybe trigger the other bot
     else if (botUsernames.includes(userToPost)) {
@@ -223,10 +218,9 @@ export async function POST(request: Request) {
       // 30% chance the other bot continues the conversation
       const otherBot = userToPost === 'ethan_k' ? 'elijah_b' : 'ethan_k'
       if (Math.random() < 0.3) {
-        const delay = Math.floor(Math.random() * 4000) + 3000 // 3-7 seconds
-        setTimeout(() => {
-          triggerBotChat(otherBot, content, userToPost)
-        }, delay)
+        triggerBotChat(otherBot, content, userToPost).catch(err =>
+          console.error('Other bot chat trigger failed:', err)
+        )
       }
     }
 
