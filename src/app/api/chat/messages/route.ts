@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase'
 
 // GET /api/chat/messages
-// Returns chat messages with user data
+// Returns chat messages with user data and reply references
 export async function GET() {
   try {
     const supabase = getSupabaseAdmin()
@@ -17,6 +17,13 @@ export async function GET() {
           display_name,
           avatar_url,
           is_bot
+        ),
+        reply_to:chat_messages!chat_messages_reply_to_id_fkey (
+          id,
+          content,
+          user:users!chat_messages_user_id_fkey (
+            display_name
+          )
         )
       `)
       .order('created_at', { ascending: true })
@@ -39,7 +46,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = await request.json()
-    const { content, username, media_url, media_type } = body
+    const { content, username, media_url, media_type, reply_to_id } = body
 
     if (!content) {
       return NextResponse.json({ error: 'Content is required' }, { status: 400 })
@@ -59,6 +66,28 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: `User not found: ${userToPost}` }, { status: 404 })
     }
 
+    // Get reply context if replying to a message
+    let replyContext: { username: string; displayName: string; content: string } | null = null
+    if (reply_to_id) {
+      const { data: replyMsg } = await supabase
+        .from('chat_messages')
+        .select(`
+          content,
+          user:users!chat_messages_user_id_fkey (username, display_name)
+        `)
+        .eq('id', reply_to_id)
+        .single()
+
+      if (replyMsg) {
+        const replyUser = replyMsg.user as unknown as { username: string; display_name: string }
+        replyContext = {
+          username: replyUser?.username || 'unknown',
+          displayName: replyUser?.display_name || 'Unknown',
+          content: replyMsg.content,
+        }
+      }
+    }
+
     // Create the chat message
     const { data: message, error: messageError } = await supabase
       .from('chat_messages')
@@ -67,6 +96,7 @@ export async function POST(request: Request) {
         content,
         media_url: media_url || null,
         media_type: media_type || null,
+        reply_to_id: reply_to_id || null,
       })
       .select(`
         *,
@@ -128,7 +158,12 @@ export async function POST(request: Request) {
     }
 
     // Helper to trigger a bot chat response
-    const triggerBotChat = async (botUsername: string, targetContent: string, senderUsername: string) => {
+    const triggerBotChat = async (
+      botUsername: string,
+      targetContent: string,
+      senderUsername: string,
+      replyInfo?: { username: string; displayName: string; content: string } | null
+    ) => {
       const webhook = botUsername === 'ethan_k'
         ? 'https://neveleren.app.n8n.cloud/webhook/ethan-chat'
         : 'https://neveleren.app.n8n.cloud/webhook/elijah-chat'
@@ -150,8 +185,17 @@ export async function POST(request: Request) {
           body: JSON.stringify({
             message_content: targetContent,
             sender: senderUsername,
+            sender_display_name: senderUsername === 'lamienq' ? 'Rene' :
+                                 senderUsername === 'ethan_k' ? 'Ethan' :
+                                 senderUsername === 'elijah_b' ? 'Eli' : senderUsername,
             chat_history: chatHistory,
             other_bot_said: otherBotLastMsg?.content || null,
+            // Reply context - who the sender was replying to
+            reply_to: replyInfo ? {
+              username: replyInfo.username,
+              display_name: replyInfo.displayName,
+              content: replyInfo.content,
+            } : null,
             context: context ? {
               time: context.time,
               mood: context.state?.mood,
@@ -194,10 +238,10 @@ export async function POST(request: Request) {
 
       // Fire webhooks immediately (can't use setTimeout on serverless)
       // Both bots will respond - n8n workflows handle their own timing
-      triggerBotChat('ethan_k', content, userToPost).catch(err =>
+      triggerBotChat('ethan_k', content, userToPost, replyContext).catch(err =>
         console.error('Ethan chat trigger failed:', err)
       )
-      triggerBotChat('elijah_b', content, userToPost).catch(err =>
+      triggerBotChat('elijah_b', content, userToPost, replyContext).catch(err =>
         console.error('Eli chat trigger failed:', err)
       )
     }
@@ -218,7 +262,7 @@ export async function POST(request: Request) {
       // 30% chance the other bot continues the conversation
       const otherBot = userToPost === 'ethan_k' ? 'elijah_b' : 'ethan_k'
       if (Math.random() < 0.3) {
-        triggerBotChat(otherBot, content, userToPost).catch(err =>
+        triggerBotChat(otherBot, content, userToPost, replyContext).catch(err =>
           console.error('Other bot chat trigger failed:', err)
         )
       }

@@ -1,6 +1,9 @@
 'use client'
 
+import { Reply } from 'lucide-react'
+
 interface ChatMessageProps {
+  id: string
   content: string
   username: string
   displayName: string
@@ -10,9 +13,15 @@ interface ChatMessageProps {
   timestamp: string
   mediaUrl?: string
   mediaType?: string
+  replyTo?: {
+    displayName: string
+    content: string
+  }
+  onReply?: (id: string, displayName: string) => void
 }
 
 export function ChatMessage({
+  id,
   content,
   username,
   displayName,
@@ -22,6 +31,8 @@ export function ChatMessage({
   timestamp,
   mediaUrl,
   mediaType,
+  replyTo,
+  onReply,
 }: ChatMessageProps) {
   const formattedTime = new Date(timestamp).toLocaleTimeString('en-US', {
     hour: 'numeric',
@@ -48,7 +59,7 @@ export function ChatMessage({
   })
 
   return (
-    <div className={`flex gap-3 ${isOwnMessage ? 'flex-row-reverse' : 'flex-row'}`}>
+    <div className={`group flex gap-3 ${isOwnMessage ? 'flex-row-reverse' : 'flex-row'}`}>
       {/* Avatar */}
       <div className="flex-shrink-0">
         {avatarUrl ? (
@@ -75,7 +86,32 @@ export function ChatMessage({
             {isBot && <span className="ml-1 text-foreground-muted">(bot)</span>}
           </span>
           <span className="text-xs text-foreground-muted">{formattedTime}</span>
+          {/* Reply button - shows on hover */}
+          {onReply && (
+            <button
+              onClick={() => onReply(id, displayName)}
+              className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-border rounded"
+              title="Reply"
+            >
+              <Reply size={12} strokeWidth={1.5} />
+            </button>
+          )}
         </div>
+
+        {/* Reply reference */}
+        {replyTo && (
+          <div className={`flex items-center gap-1.5 mb-1 text-xs text-foreground-muted ${isOwnMessage ? 'justify-end' : 'justify-start'}`}>
+            <Reply size={12} strokeWidth={1.5} className="rotate-180" />
+            <span>Reply to <span className="font-medium">{replyTo.displayName}</span></span>
+          </div>
+        )}
+
+        {/* Replied message preview */}
+        {replyTo && (
+          <div className={`mb-1 px-3 py-1.5 border-l-2 border-foreground-muted/50 bg-background-alt/50 text-xs text-foreground-muted ${isOwnMessage ? 'ml-auto' : ''}`} style={{ maxWidth: 'fit-content' }}>
+            <p className="line-clamp-1">{replyTo.content}</p>
+          </div>
+        )}
 
         {/* Message content */}
         <div

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { X, Send, ImagePlus } from 'lucide-react'
+import { X, Send, ImagePlus, Reply } from 'lucide-react'
 import { ChatMessage } from './ChatMessage'
 
 interface Message {
@@ -10,6 +10,14 @@ interface Message {
   media_url?: string
   media_type?: string
   created_at: string
+  reply_to_id?: string
+  reply_to?: {
+    id: string
+    content: string
+    user: {
+      display_name: string
+    }
+  }
   user: {
     id: string
     username: string
@@ -31,8 +39,16 @@ export function ChatOverlay({ isOpen, onClose }: ChatOverlayProps) {
   const [isSending, setIsSending] = useState(false)
   const [showImageInput, setShowImageInput] = useState(false)
   const [imageUrl, setImageUrl] = useState('')
+  const [replyingTo, setReplyingTo] = useState<{ id: string; displayName: string } | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
   const currentUser = 'lamienq' // Your username
+
+  // Handle reply button click
+  const handleReply = (messageId: string, displayName: string) => {
+    setReplyingTo({ id: messageId, displayName })
+    inputRef.current?.focus()
+  }
 
   // Fetch messages
   const fetchMessages = async () => {
@@ -78,6 +94,7 @@ export function ChatOverlay({ isOpen, onClose }: ChatOverlayProps) {
           username: currentUser,
           media_url: imageUrl || null,
           media_type: imageUrl ? 'image' : null,
+          reply_to_id: replyingTo?.id || null,
         }),
       })
 
@@ -85,6 +102,7 @@ export function ChatOverlay({ isOpen, onClose }: ChatOverlayProps) {
         setNewMessage('')
         setImageUrl('')
         setShowImageInput(false)
+        setReplyingTo(null)
         // Immediately fetch to show the new message
         await fetchMessages()
       }
@@ -140,6 +158,7 @@ export function ChatOverlay({ isOpen, onClose }: ChatOverlayProps) {
               {messages.map((msg) => (
                 <ChatMessage
                   key={msg.id}
+                  id={msg.id}
                   content={msg.content}
                   username={msg.user.username}
                   displayName={msg.user.display_name}
@@ -149,6 +168,11 @@ export function ChatOverlay({ isOpen, onClose }: ChatOverlayProps) {
                   timestamp={msg.created_at}
                   mediaUrl={msg.media_url}
                   mediaType={msg.media_type}
+                  replyTo={msg.reply_to ? {
+                    displayName: msg.reply_to.user.display_name,
+                    content: msg.reply_to.content,
+                  } : undefined}
+                  onReply={handleReply}
                 />
               ))}
               <div ref={messagesEndRef} />
@@ -192,6 +216,22 @@ export function ChatOverlay({ isOpen, onClose }: ChatOverlayProps) {
           </div>
         )}
 
+        {/* Replying to indicator */}
+        {replyingTo && (
+          <div className="px-4 py-2 border-t border-border bg-background-alt flex items-center justify-between">
+            <div className="flex items-center gap-2 text-sm text-foreground-muted">
+              <Reply size={14} strokeWidth={1.5} className="rotate-180" />
+              <span>Reply to <span className="font-medium text-foreground">{replyingTo.displayName}</span></span>
+            </div>
+            <button
+              onClick={() => setReplyingTo(null)}
+              className="text-foreground-muted hover:text-foreground"
+            >
+              <X size={16} strokeWidth={1.5} />
+            </button>
+          </div>
+        )}
+
         {/* Input area */}
         <div className="p-4 border-t border-border">
           <div className="flex gap-2">
@@ -204,11 +244,12 @@ export function ChatOverlay({ isOpen, onClose }: ChatOverlayProps) {
             </button>
 
             <input
+              ref={inputRef}
               type="text"
               value={newMessage}
               onChange={(e) => setNewMessage(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Type a message..."
+              placeholder={replyingTo ? `Reply to ${replyingTo.displayName}...` : "Type a message..."}
               className="flex-1 px-4 py-2 border border-border bg-background-alt outline-none focus:border-foreground transition-colors"
               disabled={isSending}
             />
