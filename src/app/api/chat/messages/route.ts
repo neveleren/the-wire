@@ -7,6 +7,7 @@ export async function GET() {
   try {
     const supabase = getSupabaseAdmin()
 
+    // First, get all messages with user data
     const { data: messages, error } = await supabase
       .from('chat_messages')
       .select(`
@@ -17,13 +18,6 @@ export async function GET() {
           display_name,
           avatar_url,
           is_bot
-        ),
-        reply_to:chat_messages!chat_messages_reply_to_id_fkey (
-          id,
-          content,
-          user:users!chat_messages_user_id_fkey (
-            display_name
-          )
         )
       `)
       .order('created_at', { ascending: true })
@@ -34,7 +28,32 @@ export async function GET() {
       return NextResponse.json({ error: 'Failed to fetch messages' }, { status: 500 })
     }
 
-    return NextResponse.json({ messages: messages || [] })
+    // Get reply data for messages that have reply_to_id
+    const messagesWithReplies = await Promise.all(
+      (messages || []).map(async (msg) => {
+        if (msg.reply_to_id) {
+          const { data: replyMsg } = await supabase
+            .from('chat_messages')
+            .select(`
+              id,
+              content,
+              user:users!chat_messages_user_id_fkey (display_name)
+            `)
+            .eq('id', msg.reply_to_id)
+            .single()
+
+          if (replyMsg) {
+            return {
+              ...msg,
+              reply_to: replyMsg,
+            }
+          }
+        }
+        return msg
+      })
+    )
+
+    return NextResponse.json({ messages: messagesWithReplies })
   } catch (error) {
     console.error('Chat API error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
